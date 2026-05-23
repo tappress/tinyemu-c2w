@@ -1323,6 +1323,8 @@ int main(int argc, char **argv)
       exit(1);
     }
 #endif
+    printf("[tappress-fork] TinyEMU starting from tappress/tinyemu-c2w\n");
+    fflush(stdout);
 
     /* const char *cmdline, *build_preload_file; */
     char *entrypoint = NULL, *net = NULL, *mac = NULL, *bundle = NULL;
