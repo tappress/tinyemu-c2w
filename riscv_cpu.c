@@ -729,6 +729,7 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr,
         break;
 #endif
     case 0xc00: /* ucycle */
+    case 0xc01: /* utime */
     case 0xc02: /* uinstret */
         {
             uint32_t counteren;
@@ -741,7 +742,14 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr,
                     goto invalid_csr;
             }
         }
-        val = (int64_t)s->insn_counter;
+        /* utime is the wall-clock counter exposed at the timebase-frequency
+           advertised in the device tree (RTC_FREQ / RTC_FREQ_DIV). Derive it
+           from the same cycle counter mtime reads from so a userland csrr
+           time and an mmio read of mtime stay consistent. */
+        if (csr == 0xc01)
+            val = (int64_t)(s->insn_counter / 16);
+        else
+            val = (int64_t)s->insn_counter;
         break;
     case 0xc80: /* mcycleh */
     case 0xc82: /* minstreth */
@@ -840,6 +848,12 @@ static int csr_read(RISCVCPUState *s, target_ulong *pval, uint32_t csr,
         break;
     case 0xf14:
         val = s->mhartid;
+        break;
+    /* PMP — Physical Memory Protection. We don't enforce PMP, but accept
+       reads as zero so OpenSBI's setup probes don't take an illegal-insn
+       trap. (pmpcfg0..15 at 0x3A0-0x3AF, pmpaddr0..63 at 0x3B0-0x3EF.) */
+    case 0x3a0 ... 0x3ef:
+        val = 0;
         break;
     default:
     invalid_csr:
@@ -1008,6 +1022,9 @@ static int csr_write(RISCVCPUState *s, uint32_t csr, target_ulong val)
     case 0x344:
         mask = MIP_SSIP | MIP_STIP;
         s->mip = (s->mip & ~mask) | (val & mask);
+        break;
+    /* PMP — silently accept writes; we don't enforce. (See csr_read above.) */
+    case 0x3a0 ... 0x3ef:
         break;
     default:
 #ifdef DUMP_INVALID_CSR
