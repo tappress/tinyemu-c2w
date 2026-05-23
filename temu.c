@@ -364,6 +364,8 @@ static int bf_write_async(BlockDevice *bs,
     return ret;
 }
 
+extern BlockDevice *block_opfs_init(const char *url);
+
 static BlockDevice *block_device_init(const char *filename,
                                       BlockDeviceModeEnum mode)
 {
@@ -373,12 +375,17 @@ static BlockDevice *block_device_init(const char *filename,
     FILE *f;
     const char *mode_str;
 
+    /* OPFS-backed drives are addressed by URL; mode is ignored (always RW). */
+    if (strncmp(filename, "opfs://", 7) == 0) {
+        return block_opfs_init(filename);
+    }
+
     if (mode == BF_MODE_RW) {
         mode_str = "r+b";
     } else {
         mode_str = "rb";
     }
-    
+
     f = fopen(filename, mode_str);
     if (!f) {
         perror(filename);
@@ -1149,6 +1156,9 @@ void init_func_args(char *net)
     }
 
     for(i = 0; i < p->drive_count; i++) {
+      /* OPFS-backed drives have no FILE* to close. */
+      if (strncmp(p->tab_drive[i].filename, "opfs://", 7) == 0)
+        continue;
       BlockDeviceFile *bf = p->tab_drive[i].block_dev->opaque;
       fclose(bf->f);
     }
@@ -1450,6 +1460,10 @@ int main(int argc, char **argv)
     // reopen drive files as we can't use stale file descriptors registered during initialize.
     for(i = 0; i < p->drive_count; i++) {
         FILE *f;
+        /* OPFS-backed drives have no file descriptor to refresh — the host
+           import opens the OPFS handle once per session. */
+        if (strncmp(p->tab_drive[i].filename, "opfs://", 7) == 0)
+            continue;
         BlockDeviceFile *bf = p->tab_drive[i].block_dev->opaque;
         char *fname;
         fname = get_file_path(p->cfg_filename, p->tab_drive[i].filename);
