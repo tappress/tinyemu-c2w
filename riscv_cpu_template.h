@@ -1351,8 +1351,11 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
         case 0x0f: /* misc-mem */
             funct3 = (insn >> 12) & 7;
             switch(funct3) {
-            case 0: /* fence */
-                if (insn & 0xf00fff80)
+            case 0: /* fence (and FENCE.TSO + reserved fm encodings) */
+                /* Per RV spec, reserved FENCE encodings (incl. FENCE.TSO, fm=8)
+                   are implementation-defined; the conservative behavior is to
+                   treat them as a global FENCE. We only require rs1=rd=0. */
+                if (insn & 0x000fff80)
                     goto illegal_insn;
                 break;
             case 1: /* fence.i */
